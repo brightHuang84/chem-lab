@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>虚拟化学实验室 · Virtual Chemistry Lab</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="flask">⚗</span><div><h1>虚拟化学实验室</h1><small>选试剂 · 设条件 · 看结果 — 基于热力学数据的规则引擎</small></div></div>
+  <nav id="tabs">
+    <button data-view="bench" class="on">实验台</button>
+    <button data-view="titr">滴定模式</button>
+    <button data-view="note">实验笔记本 <span id="nbCount" class="badge">0</span></button>
+    <button data-view="about">说明</button>
+  </nav>
+</header>
+
+<!-- ================= 实验台 ================= -->
+<main id="view-bench" class="view on">
+  <section class="panel shelf">
+    <h2>试剂架</h2>
+    <div class="shelf-tools">
+      <input id="shelfSearch" type="search" placeholder="搜索名称 / 化学式…">
+      <select id="shelfCat"></select>
+    </div>
+    <div id="shelfList" class="shelf-list"></div>
+    <div id="reagentDetail" class="detail"><p class="muted">点击试剂查看理化数据，并设置加入量。</p></div>
+  </section>
+
+  <section class="bench">
+    <div class="panel stage">
+      <div class="stage-top">
+        <h2>工作台</h2>
+        <div class="examples"><label>示例实验</label><select id="examples"></select></div>
+      </div>
+      <div class="stage-body">
+        <div class="vesselbox"><canvas id="vessel" width="330" height="380"></canvas><div id="vesselLabel" class="vlabel"></div></div>
+        <div class="instruments">
+          <div class="inst thermo"><div class="tube"><div id="thermoFill"></div></div><div><span class="lbl">温度计</span><b id="thermoVal">25.0</b> °C</div></div>
+          <div class="inst ph"><span class="lbl">pH 计</span><div class="lcd" id="phVal">—</div><small id="phName"></small></div>
+          <div class="inst bal"><span class="lbl">电子天平</span><div class="lcd" id="balVal">0.000</div><small>g（总加入质量）</small></div>
+          <div class="inst vol"><span class="lbl">总体积</span><div class="lcd" id="volVal">0.0</div><small>mL</small></div>
+        </div>
+      </div>
+      <div class="additions"><h3>已加入的试剂 <small class="muted">（按“步骤”顺序依次加入，同一步骤的试剂同时混合）</small></h3><div id="addList" class="addlist"></div></div>
+    </div>
+
+    <div class="panel equip">
+      <h2>设备与条件</h2>
+      <div class="equip-grid">
+        <label>容器<select id="vessel_sel"></select></label>
+        <label><span>初始/设定温度 <b id="tVal">25</b> °C</span><input id="tRange" type="range" min="0" max="1200" step="1" value="25"></label>
+        <label class="chk"><input id="plate" type="checkbox"> 加热板（恒温控制）</label>
+        <label class="chk"><input id="ice" type="checkbox"> 冰浴（0 °C）</label>
+        <label class="chk"><input id="stir" type="checkbox"> 磁力搅拌</label>
+        <label class="chk"><input id="ignite" type="checkbox"> 点火源（明火）</label>
+        <label>催化剂槽<select id="catalyst"></select></label>
+        <label>气氛<select id="atm"><option value="air">空气</option><option value="N2">氮气（惰性）</option></select></label>
+        <label>指示剂<select id="indicator"></select></label>
+        <label class="chk"><input id="electro" type="checkbox"> 电解装置</label>
+      </div>
+      <div id="electroBox" class="electro-box hide">
+        <label>电压 U (V)<input id="eV" type="number" value="5" min="0.5" max="30" step="0.5"></label>
+        <label>电流 I (A)<input id="eI" type="number" value="1" min="0.01" max="20" step="0.1"></label>
+        <label>时间 t (s)<input id="eT" type="number" value="600" min="1" step="10"></label>
+        <label>电极<select id="eElec"><option value="graphite">石墨（惰性）</option><option value="copper">铜（活性阳极）</option></select></label>
+      </div>
+      <div class="actions">
+        <button id="btnReact" class="primary">▶ 开始反应</button>
+        <button id="btnClear">清空容器</button>
+        <button id="btnSave">保存到笔记本</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel results">
+    <div class="rtabs"><button data-rt="res" class="on">结果</button><button data-rt="log">计算日志</button></div>
+    <div id="rt-res" class="rt on"><div id="resultBox" class="muted pad">加入试剂后点击“开始反应”。引擎会判断反应能否发生、产物、热效应、pH 和现象。</div></div>
+    <div id="rt-log" class="rt"><div id="logBox" class="log muted pad">（反应后在此显示逐步计算过程）</div></div>
+  </section>
+</main>
+
+<!-- ================= 滴定 ================= -->
+<main id="view-titr" class="view">
+  <section class="panel titr-setup">
+    <h2>滴定设置</h2>
+    <label>待测液（锥形瓶）<select id="tAn"></select></label>
+    <div class="row2"><label>体积 (mL)<input id="tAnV" type="number" value="25" min="1" max="100" step="0.5"></label><label>浓度 (mol/L)<input id="tAnC" type="number" value="0.1" min="0.0001" max="5" step="0.01"></label></div>
+    <label>标准液（滴定管）<select id="tTi"></select></label>
+    <label>浓度 (mol/L)<input id="tTiC" type="number" value="0.1" min="0.0001" max="5" step="0.01"></label>
+    <label>额外加水 (mL)<input id="tWater" type="number" value="0" min="0" max="200" step="5"></label>
+    <label>指示剂<select id="tInd"></select></label>
+    <label>曲线终点体积 (mL)<input id="tVmax" type="number" value="50" min="5" max="150" step="1"></label>
+    <div id="tTheory" class="theory"></div>
+  </section>
+  <section class="panel titr-main">
+    <div class="titr-top">
+      <div class="burette"><div class="bu-scale"><div id="buFill"></div></div><div class="bu-cock"></div><div class="bu-tip"></div><div class="bu-read">读数 <b id="buRead">0.00</b> mL</div></div>
+      <div class="titr-flask"><canvas id="tFlask" width="260" height="300"></canvas><div class="titr-info"><div>已滴加 <b id="tV">0.00</b> mL</div><div>pH = <b id="tPH">—</b></div><div>指示剂颜色：<span id="tColor" class="swatch"></span><b id="tColorName"></b></div></div></div>
+      <div class="titr-ctl">
+        <div class="btns"><button data-dv="0.05">+1滴</button><button data-dv="0.5">+0.5</button><button data-dv="1">+1</button><button data-dv="5">+5</button></div>
+        <label>滴定体积滑块<input id="tSlider" type="range" min="0" max="50" step="0.01" value="0"></label>
+        <div class="btns"><button id="tAuto" class="primary">▶ 连续滴定</button><button id="tReset">复位</button><button id="tToEq">滴到第一等当点</button></div>
+        <div id="tReport" class="theory"></div>
+      </div>
+    </div>
+    <canvas id="tCurve" width="760" height="340"></canvas>
+  </section>
+</main>
+
+<!-- ================= 笔记本 ================= -->
+<main id="view-note" class="view">
+  <section class="panel notebook">
+    <div class="nb-top"><h2>实验笔记本</h2>
+      <div class="btns"><button id="nbJson">导出 JSON</button><button id="nbMd">导出 Markdown</button><button id="nbCsv">导出 CSV</button><label class="filebtn">导入 JSON<input id="nbImport" type="file" accept=".json,application/json"></label><button id="nbClear" class="danger">清空</button></div></div>
+    <div id="nbList" class="nb-list"></div>
+  </section>
+</main>
+
+<!-- ================= 说明 ================= -->
+<main id="view-about" class="view">
+  <section class="panel about" id="aboutBox"></section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/react.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/viz.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
