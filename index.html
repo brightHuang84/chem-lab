@@ -12,6 +12,8 @@
   <nav id="tabs">
     <button data-view="bench" class="on">实验台</button>
     <button data-view="titr">滴定模式</button>
+    <button data-view="cell">原电池</button>
+    <button data-view="equil">平衡·动力学</button>
     <button data-view="note">实验笔记本 <span id="nbCount" class="badge">0</span></button>
     <button data-view="about">说明</button>
   </nav>
@@ -57,15 +59,20 @@
         <label class="chk"><input id="stir" type="checkbox"> 磁力搅拌</label>
         <label class="chk"><input id="ignite" type="checkbox"> 点火源（明火）</label>
         <label>催化剂槽<select id="catalyst"></select></label>
-        <label>气氛<select id="atm"><option value="air">空气</option><option value="N2">氮气（惰性）</option></select></label>
+        <label>气氛<select id="atm"><option value="air">空气</option><option value="N2">氮气（惰性）</option><option value="H2">氢气（氢化）</option></select></label>
         <label>指示剂<select id="indicator"></select></label>
-        <label class="chk"><input id="electro" type="checkbox"> 电解装置</label>
+        <label class="chk"><input id="light" type="checkbox"> 光照（紫外/强光）</label>
+        <label class="chk"><input id="flameTest" type="checkbox"> 焰色试验（铂丝灼烧）</label>
+        <label class="chk"><input id="corrosion" type="checkbox"> 吸氧腐蚀（长期暴露）</label>
+        <label class="chk"><input id="electro" type="checkbox"> 电解 / 电镀装置</label>
       </div>
       <div id="electroBox" class="electro-box hide">
         <label>电压 U (V)<input id="eV" type="number" value="5" min="0.5" max="30" step="0.5"></label>
         <label>电流 I (A)<input id="eI" type="number" value="1" min="0.01" max="20" step="0.1"></label>
         <label>时间 t (s)<input id="eT" type="number" value="600" min="1" step="10"></label>
-        <label>电极<select id="eElec"><option value="graphite">石墨（惰性）</option><option value="copper">铜（活性阳极）</option></select></label>
+        <label>电极<select id="eElec"><option value="graphite">石墨（惰性）</option><option value="copper">铜（活性阳极）</option><option value="silver">银（活性阳极）</option><option value="nickel">镍（活性阳极）</option><option value="zinc">锌（活性阳极）</option></select></label>
+        <label>电流效率 (%)<input id="eEff" type="number" value="100" min="1" max="100" step="1"></label>
+        <label>阴极面积 (cm²)<input id="eArea" type="number" value="0" min="0" step="1" title="填写后给出镀层厚度"></label>
       </div>
       <div class="actions">
         <button id="btnReact" class="primary">▶ 开始反应</button>
@@ -110,6 +117,69 @@
   </section>
 </main>
 
+
+<!-- ================= 原电池 ================= -->
+<main id="view-cell" class="view">
+  <section class="panel cell-setup">
+    <h2>原电池搭建</h2>
+    <div class="row2"><label>示例<select id="cExample"></select></label><label>温度 (°C)<input id="cT" type="number" value="25" min="0" max="95" step="1"></label></div>
+    <fieldset class="half" id="halfL"><legend>左半电池</legend>
+      <label>电对<select id="cL"></select></label>
+      <div class="row2"><label class="fox">c(氧化态) mol/L<input id="cLox" type="number" value="1" min="0.0001" step="any"></label><label class="fred">c(还原态) mol/L<input id="cLred" type="number" value="1" min="0.0001" step="any"></label></div>
+      <div class="row2"><label class="fph">pH<input id="cLph" type="number" value="0" step="0.1"></label><label class="fp">p(H₂) atm<input id="cLp" type="number" value="1" min="0.01" step="0.1"></label></div>
+    </fieldset>
+    <fieldset class="half" id="halfR"><legend>右半电池</legend>
+      <label>电对<select id="cR"></select></label>
+      <div class="row2"><label class="fox">c(氧化态) mol/L<input id="cRox" type="number" value="1" min="0.0001" step="any"></label><label class="fred">c(还原态) mol/L<input id="cRred" type="number" value="1" min="0.0001" step="any"></label></div>
+      <div class="row2"><label class="fph">pH<input id="cRph" type="number" value="0" step="0.1"></label><label class="fp">p(H₂) atm<input id="cRp" type="number" value="1" min="0.01" step="0.1"></label></div>
+    </fieldset>
+    <div class="row2"><label>盐桥<select id="cBridge"><option value="KNO3">KNO₃ 盐桥</option><option value="KCl">KCl 盐桥</option><option value="none">无盐桥(断路)</option></select></label><label>每池体积 (mL)<input id="cV" type="number" value="100" min="10" step="10"></label></div>
+    <div class="row2"><label>恒流放电 I (A)<input id="cI" type="number" value="0.05" min="0.001" step="0.01"></label><label>放电时间 t (s)<input id="cTime" type="number" value="3600" min="10" step="60"></label></div>
+    <div class="btns"><button id="cGo" class="primary">▶ 计算 / 放电</button><button id="cSwap">交换左右</button></div>
+    <p class="muted small">电势按 Nernst 方程由 E° 与浓度计算；电子由阳极(−)经外电路流向阴极(+)。选择同一电对且浓度不同即为浓差电池。</p>
+  </section>
+  <section class="panel cell-main">
+    <canvas id="cellCanvas" width="820" height="350"></canvas>
+    <div id="cellReport" class="cell-report"></div>
+    <canvas id="cellCurve" width="820" height="210"></canvas>
+  </section>
+</main>
+
+<!-- ================= 平衡·动力学 ================= -->
+<main id="view-equil" class="view">
+  <section class="panel eq-grid" id="eqBox">
+    <div class="eqcard" id="eqFe"><h3>① Fe³⁺ + SCN⁻ ⇌ FeSCN²⁺ <small>浓度扰动 (K = 890)</small></h3>
+      <div class="eq-body"><canvas class="tube" width="90" height="150"></canvas><div class="eq-ctl">
+        <label>c(Fe³⁺) <b data-o="fe"></b> mmol/L<input data-k="fe" type="range" min="0.05" max="20" step="0.05" value="2"></label>
+        <label>c(SCN⁻) <b data-o="scn"></b> mmol/L<input data-k="scn" type="range" min="0.05" max="20" step="0.05" value="2"></label>
+        <div class="btns"><button data-add="Fe">+ Fe³⁺ (×1.5)</button><button data-add="SCN">+ SCN⁻ (×1.5)</button><button data-add="rm">− Fe³⁺ (加 NaOH 使之沉淀, ×0.5)</button></div>
+        <div class="eq-out" data-out="fe"></div></div></div></div>
+    <div class="eqcard" id="eqCr"><h3>② 2 CrO₄²⁻ + 2 H⁺ ⇌ Cr₂O₇²⁻ + H₂O <small>pH 控制</small></h3>
+      <div class="eq-body"><canvas class="tube" width="90" height="150"></canvas><div class="eq-ctl">
+        <label>pH <b data-o="ph"></b><input data-k="ph" type="range" min="0" max="12" step="0.1" value="4"></label>
+        <label>c(Cr 总) <b data-o="c"></b> mmol/L<input data-k="c" type="range" min="1" max="100" step="1" value="10"></label>
+        <div class="eq-out" data-out="cr"></div></div></div></div>
+    <div class="eqcard" id="eqNo"><h3>③ N₂O₄ ⇌ 2 NO₂ <small>温度 / 压强 (ΔH = +57.2 kJ)</small></h3>
+      <div class="eq-body"><canvas class="tube" width="90" height="150"></canvas><div class="eq-ctl">
+        <label>温度 <b data-o="T"></b> °C<input data-k="T" type="range" min="-20" max="150" step="1" value="25"></label>
+        <label>总压 <b data-o="P"></b> atm (压缩/膨胀)<input data-k="P" type="range" min="0.2" max="10" step="0.1" value="1"></label>
+        <div class="eq-out" data-out="no"></div></div></div></div>
+    <div class="eqcard" id="eqCu"><h3>④ Cu²⁺ + 4 Cl⁻ ⇌ CuCl₄²⁻ <small>配位平衡颜色 (K 近似)</small></h3>
+      <div class="eq-body"><canvas class="tube" width="90" height="150"></canvas><div class="eq-ctl">
+        <label>c(Cl⁻) <b data-o="cl"></b> mol/L<input data-k="cl" type="range" min="0" max="12" step="0.1" value="1"></label>
+        <label>c(Cu²⁺) <b data-o="cu"></b> mol/L<input data-k="cu" type="range" min="0.01" max="1" step="0.01" value="0.1"></label>
+        <div class="eq-out" data-out="cu"></div></div></div></div>
+    <div class="eqcard wide2" id="eqClock"><h3>⑤ 碘钟反应 (动力学) <small>S₂O₈²⁻ + 2 I⁻ → 2 SO₄²⁻ + I₂；I₂ + 2 S₂O₃²⁻ → 2 I⁻ + S₄O₆²⁻</small></h3>
+      <div class="eq-body"><canvas id="clockCv" width="420" height="190"></canvas><div class="eq-ctl">
+        <label>c(S₂O₈²⁻) <b data-o="s"></b> mmol/L<input data-k="s" type="range" min="5" max="100" step="1" value="40"></label>
+        <label>c(I⁻) <b data-o="i"></b> mmol/L<input data-k="i" type="range" min="10" max="200" step="1" value="80"></label>
+        <label>c(S₂O₃²⁻) <b data-o="t"></b> mmol/L<input data-k="t" type="range" min="0.5" max="10" step="0.1" value="2"></label>
+        <label>温度 <b data-o="T"></b> °C<input data-k="T" type="range" min="0" max="60" step="1" value="25"></label>
+        <div class="eq-out" data-out="clock"></div></div></div></div>
+    <div class="eqcard wide2" id="eqPhoto"><h3>⑥ 光化学速查 <small>(仅作理论判断)</small></h3><div class="eq-out" id="photoTbl"></div></div>
+  </section>
+</main>
+
 <!-- ================= 笔记本 ================= -->
 <main id="view-note" class="view">
   <section class="panel notebook">
@@ -126,10 +196,16 @@
 
 <div id="toast" class="toast"></div>
 <script src="js/data.js"></script>
+<script src="js/data2.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/react.js"></script>
+<script src="js/react2.js"></script>
 <script src="js/sim.js"></script>
 <script src="js/viz.js"></script>
+<script src="js/examples2.js"></script>
 <script src="js/app.js"></script>
+<script src="js/echem.js"></script>
+<script src="js/equil.js"></script>
+<script src="js/app2.js"></script>
 </body>
 </html>

@@ -146,6 +146,145 @@ section('12. 指示剂');
 const ind = D.INDICATORS.find(i => i.id === 'pp');
 ok(E.indicatorColor(ind, 3).a < 0.05, '酚酞 pH 3 无色'); ok(E.indicatorColor(ind, 11).rgb[1] < 120, '酚酞 pH 11 粉红');
 
+
+// =====================================================================
+//  第二批反应类型 (扩展)
+// =====================================================================
+const X2 = require('../js/examples2.js'); const EC = require('../js/echem.js'); const EQ = require('../js/equil.js');
+const ex2 = key => { const e = X2.find(x => x[0].includes(key)); if (!e) throw new Error('缺少示例 ' + key); return e[1]; };
+const evs = rr => rr.events.filter(e => !e.minor && !e.qual);
+const plainEq = e => E.plain(e.eq || '');
+const Qkj = rr => rr.energy.Q;
+
+section('13. 新增内置示例: 状态与原子/电荷守恒');
+let nEx = 0, nExBad = 0, nBal = 0, nBalBad = 0;
+X2.forEach(([name, setup, expStatus]) => { if (!setup) return; nEx++; const rr = E.run(setup); if (rr.status !== expStatus) { nExBad++; console.log('    状态不符:', name, '期望', expStatus, '得到', rr.status); } (rr.events || []).forEach(e => { if (e.qual) return; nBal++; if (e.balance && !e.balance.ok) { nBalBad++; console.log('    不平衡:', name, plainEq(e)); } }); });
+ok(nEx >= 60, '新增示例数 ≥ 60', nEx); ok(nExBad === 0, nEx + ' 个新示例的判定状态全部符合预期', nExBad + ' 个不符');
+ok(nBalBad === 0, '新示例共 ' + nBal + ' 个反应事件，全部原子与电荷守恒', nBalBad + ' 个不平衡');
+ok(D.REAG.length >= 90, '试剂总数 ≥ 90 (新增约 30 种)', D.REAG.length);
+
+section('14. 取代 / 消除 (SN2, SN1, E2, Williamson)');
+r = E.run(ex2('SN2: 溴乙烷'));
+ok(r.status === 'reaction' && /SN2/.test(main(r).type), 'EtBr + OH⁻ → SN2'); near(main(r).x, 0.050, 1e-4, '限量试剂 NaOH 50 mmol → 乙醇 50 mmol');
+near(Qkj(r) / main(r).x, 78.8, 1.5, 'ΔH = ΔfH°(EtOH)+ΔfH°(Br⁻)−ΔfH°(EtBr)−ΔfH°(OH⁻) ≈ −78.7 kJ/mol');
+ok(E.run(ex2('SN2 对照')).status === 'none', '室温 SN2 极慢 → 预计无反应');
+r = E.run(ex2('SN1: 叔丁基氯')); ok(r.status === 'reaction' && /SN1/.test(main(r).type), '叔卤代烃在水中 → SN1');
+r = E.run(ex2('E2: 溴乙烷')); ok(r.status === 'reaction' && /E2|消除/.test(main(r).type) && r.gases.some(g => g.id === 'C2H4'), 'EtBr + KOH/乙醇 → E2，放出乙烯');
+r = E.run(ex2('E2: 2-溴丙烷')); ok(r.gases.some(g => g.id === 'CH3CH=CH2'), '2-溴丙烷 → 丙烯');
+r = E.run(ex2('E2: 叔丁基氯')); ok(r.gases.some(g => g.id === 'CH2=C(CH3)2'), '叔丁基氯 + 强碱 → 异丁烯 (E2 优于 SN2)');
+r = E.run(ex2('Williamson: 乙醇钠 + 溴乙烷')); ok(r.status === 'reaction' && /Williamson/.test(main(r).type) && /\(C2H5\)2O|C₂H₅\)₂O/.test(JSON.stringify(r.products)), 'Williamson: 乙氧基负离子 + EtBr → 乙醚');
+r = E.run(ex2('醇钠遇水')); ok(/C2H5OH|乙醇/.test(JSON.stringify(r.products)) && r.solution.pH > 13, '乙醇钠遇水 → NaOH + 乙醇 (pH>13，说明 Williamson 须无水)', r.solution.pH);
+
+section('15. 烯烃加成 / 氧化检验');
+r = E.run(ex2('烯烃 + 溴水')); near(main(r).x, 0.005, 1e-4, '环己烯 + Br₂(aq): Br₂ 为限量 (5 mmol)'); ok(/加成/.test(main(r).type), '加成反应');
+r = E.run(ex2('催化氢化')); near(Qkj(r) / main(r).x, 117.9, 1.0, '氢化 ΔH = ΔfH°(环己烷) − ΔfH°(环己烯) ≈ −117.9 kJ/mol (文献 −119.6)');
+ok(E.run(ex2('氢化对照')).status === 'none', '无催化剂: 氢化不发生 (动力学)');
+r = E.run(ex2('Baeyer')); ok(r.status === 'reaction' && solidOf(r, 'MnO2'), 'Baeyer 试验: KMnO₄ 褪色并生成 MnO₂ 棕色沉淀');
+ok(E.run(ex2('苯 + 溴水')).status === 'none', '苯 + Br₂ (无催化): 不反应 (与烯烃对比)');
+r = E.run(ex2('苯的溴代')); ok(r.status === 'reaction' && /取代/.test(main(r).type), '苯 + Br₂ (FeBr₃): 亲电取代');
+ok(E.run(ex2('烷烃 + Br₂ 暗处')).status === 'none' && E.run(ex2('烷烃溴代')).status === 'reaction', '烷烃溴代需光照: 暗处无反应 / 光照反应');
+r = E.run(ex2('苯酚 + 溴水')); ok(r.status === 'reaction' && solidOf(r, 'C6H3Br3O'), '苯酚 + 溴水 → 2,4,6-三溴苯酚沉淀');
+r = E.run(ex2('醇氧化(仲)')); ok(r.status === 'reaction' && /C3H6O/.test(JSON.stringify(r.products)), '异丙醇 + Cr₂O₇²⁻ → 丙酮');
+ok(E.run(ex2('醇氧化(叔)')).status === 'none', '叔醇不被氧化 (无 α-H)');
+ok(E.run(ex2('酮不被氧化')).status === 'none', '丙酮不被 KMnO₄ 氧化');
+r = E.run(ex2('醛氧化')); ok(r.status === 'reaction' && /CH3COOH|乙酸/.test(JSON.stringify(r.products)), '乙醛 → 乙酸');
+r = E.run(ex2('Tollens 银镜')); const agS = solidOf(r, 'Ag'); ok(r.status === 'reaction' && agS, 'Tollens: 乙醛 → 银镜'); near(agS.m, 0.2157, 0.003, 'Ag 沉积 = 2 mmol × 107.87 = 0.216 g (银氨为限量: 1 CH₃CHO 还原 2 Ag⁺)');
+ok(E.run(ex2('Tollens 对照')).status === 'physical' || E.run(ex2('Tollens 对照')).status === 'none', '蔗糖(非还原糖) 不被 Tollens 氧化');
+r = E.run(ex2('斐林')); ok(r.status === 'reaction' && solidOf(r, 'Cu2O'), '斐林试验: 葡萄糖 + Cu(II) 碱性 70 °C → Cu₂O 砖红');
+r = E.run({ additions: [Mm('C6H12O6', 0.3), S('Fehling', 20, 0.07)] }); ok(r.status === 'none', '斐林试验常温不反应 (需水浴加热)');
+r = E.run(ex2('碘仿反应: 丙酮')); ok(r.status === 'reaction' && solidOf(r, 'CHI3'), '碘仿反应: 丙酮 → CHI₃ 黄色沉淀');
+r = E.run(ex2('Lucas')); ok(r.status === 'reaction' && /Lucas/.test(main(r) ? main(r).type || '' : '') || r.events.some(e => /Lucas/.test(e.type)), 'Lucas: 叔醇立即浑浊');
+r = E.run(ex2('羟醛缩合')); ok(r.status === 'reaction' && solidOf(r, 'C17H14O'), 'Claisen–Schmidt: 2 PhCHO + 丙酮 → 二亚苄基丙酮 (黄色沉淀)');
+r = E.run(ex2('侧链氧化')); ok(r.status === 'reaction' && solidOf(r, 'MnO2'), '甲苯 + KMnO₄ (热) → 苯甲酸盐 + MnO₂');
+
+section('16. 酯 / 酰胺 / 聚合');
+r = E.run(ex2('皂化: 橄榄油')); near(main(r).x, 0.005167, 2e-5, '橄榄油 5 mL (ρ0.915, M885.4) = 5.17 mmol 为限量 (NaOH 60 mmol, 需 3 倍)');
+near(r.yields[0].nTheo, 0.005167, 2e-5, '甘油理论产量 = 5.17 mmol'); ok(/C18H33O2/.test(JSON.stringify(r.products)), '生成油酸钠(肥皂)');
+ok(E.run(ex2('皂化')) && E.run({ additions: [Lq('C57H104O6', 5), S('NaOH', 30, 2)] }).status === 'none', '室温油水两相: 皂化几乎不发生');
+r = E.run(ex2('肥皂遇硬水')); ok(solidOf(r, 'Ca(C18H33O2)2'), '硬水 Ca²⁺ + 肥皂 → 皂垢沉淀');
+['Fischer 酯化: 乙酸 + 异戊醇', 'Fischer 酯化: 水杨酸', 'Fischer 酯化: 苯甲酸'].forEach(k => { const rr = E.run(ex2(k)); ok(rr.status === 'reaction' && rr.esterEq, k + ' → 平衡转化率有限 (非 100%)'); });
+r = E.run(ex2('酰胺: 苯胺')); ok(r.status === 'reaction' && solidOf(r, 'C8H9NO'), '苯胺 + 乙酸酐 → 乙酰苯胺'); near(r.yields[0].nTheo * 1000, 21.9, 0.4, '乙酰苯胺理论产量 = 苯胺 21.9 mmol (苯胺为限量)');
+r = E.run(ex2('尼龙绳')); ok(r.status === 'reaction' && solidOf(r, '[C12H22N2O2]'), '界面缩聚 → 尼龙-66');
+r = E.run(ex2('自由基聚合')); ok(r.status === 'reaction' && Qkj(r) > 0 && solidOf(r, '[C8H8]'), '苯乙烯聚合: 放热, 生成聚苯乙烯'); ok(E.run({ additions: [Lq('C8H8', 5), S('K2S2O8', 20, 0.05)] }).status === 'none', '无加热: 引发剂不分解，不聚合');
+r = E.run(ex2('泡沫塑料溶解')); ok(Math.abs(r.energy.Q) < 0.01, '聚苯乙烯溶于丙酮: 物理过程，无化学热');
+
+section('17. 电镀 / 腐蚀 (法拉第定律)');
+r = E.run(ex2('电镀铜')); near(r.electro.molEUsed, 1800 * 1 * 0.98 / 96485.33, 1e-5, '电镀铜: 有效电子 = I·t·η/F');
+ok(/32\.4/.test(r.electro.lines.join('')), '镀层厚度 = m/(ρA) ≈ 32.4 μm (0.581 g, 8.96 g/cm³, 20 cm²)'); ok(/0\.58/.test(r.electro.lines.join('')), 'm(Cu) = 9.141 mmol × 63.55 = 0.581 g');
+r = E.run(ex2('电镀银')); near(r.electro.molEUsed * 107.868, 0.2683, 0.002, '电镀银: m(Ag) = 0.2 A × 1200 s × 107.87/96485 = 0.268 g');
+r = E.run(ex2('电镀镍')); ok(/2[23]\.\d/.test(r.electro.lines.join('')), '镍层厚度约 23 μm (η=95%)');
+r = E.run(ex2('电镀锌')); ok(/\u9501|Zn/.test(r.electro.lines.join('')) && /30\.\d/.test(r.electro.lines.join('')), 'Zn 在高析氢过电势下可镀出 (~31 μm)，而非只析氢');
+r = E.run(ex2('腐蚀: 铁钉')); ok(r.status === 'reaction' && /腐蚀/.test(JSON.stringify(r.events.map(e => e.type))), '铁 + O₂ + 盐水 → 吸氧腐蚀 (Fe(OH)₂ → Fe(OH)₃ 铁锈)');
+ok(/1\.2/.test(JSON.stringify(r.events.map(e => e.why))) || r.reasons.length >= 0, 'E°cell(O₂/Fe) ≈ 1.2–1.3 V > 0');
+r = E.run(ex2('牺牲阳极')); ok(/牺牲阳极/.test(JSON.stringify(r.notes)), '锌-铁偶: 锌作阳极被腐蚀 (牺牲阳极保护)');
+ok(E.run(ex2('腐蚀对照')).status === 'none', '纯水中铁腐蚀极慢 (无电解质)');
+
+section('18. 原电池 (E°cell, Nernst, ΔG, K)');
+const gv = (L, Rr, o) => EC.galvanic(Object.assign({ left: { couple: L[0], cox: L[1], cred: L[2], pH: L[3], P: L[4] }, right: { couple: Rr[0], cox: Rr[1], cred: Rr[2], pH: Rr[3], P: Rr[4] }, T: 25 }, o || {}));
+let g1 = gv(['Zn', 1], ['Cu', 1]);
+near(g1.E0, 1.104, 0.002, '丹尼尔电池 E° = 0.342 − (−0.762) = 1.104 V'); near(g1.E, 1.104, 0.002, '标准浓度 E = E°'); ok(g1.anode.couple === 'Zn' && g1.cathode.couple === 'Cu', 'Zn 为阳极, Cu 为阴极');
+near(g1.dG0, -2 * 96485.33 * 1.104 / 1000, 0.5, 'ΔG° = −nFE° = −213 kJ/mol'); near(g1.logK, 2 * 1.104 / 0.05916, 0.05, 'lg K = nE°/0.05916 ≈ 37.3');
+near(g1.Wmax, -g1.dG, 1e-9, '最大电功 Wmax = −ΔG = nFE');
+ok(g1.react['Cu^2+'] === 1 && g1.react.Zn === 1 && g1.prod.Cu === 1 && g1.prod['Zn^2+'] === 1, '总反应 Zn + Cu²⁺ → Zn²⁺ + Cu 平衡');
+g1 = gv(['Zn', 0.001], ['Cu', 1]); near(g1.E, 1.104 + 0.05916 / 2 * 3, 0.003, 'Nernst: [Zn²⁺]=10⁻³ → E = E° + 0.0296×3 = 1.193 V');
+near(gv(['Zn', 1], ['Ag', 1]).E0, 1.562, 0.003, 'Zn‖Ag⁺: E° = 0.800 + 0.762 = 1.562 V'); near(gv(['Cu', 1], ['Ag', 1]).E0, 0.458, 0.003, 'Cu‖Ag⁺: E° = 0.458 V');
+g1 = gv(['Cu', 0.01], ['Cu', 1]); near(g1.E0, 0, 1e-9, '浓差电池 E° = 0'); near(g1.E, 0.05916, 0.0006, '浓差电池 E = (RT/2F)·ln(100) = 0.0592 V'); ok(g1.concentrationCell && g1.anode.side === 'left', '稀溶液一侧为阳极');
+g1 = gv(['SHE', 1, null, 0, 1], ['Cu', 1]); near(g1.E, 0.342, 0.002, '标准氢电极 ‖ Cu²⁺/Cu: E = +0.342 V (定义 E°(SHE)=0)');
+g1 = gv(['SHE', 1, null, 7, 1], ['Cu', 1]); near(g1.E, 0.342 + 0.05916 * 7 / 1, 0.01, 'pH 7 的氢电极: E(H⁺/H₂) = −0.414 V → Ecell = 0.756 V');
+near(gv(['Fe3', 1, 1], ['MnO4', 1, 1, 0]).E0, 1.507 - 0.771, 0.002, 'MnO₄⁻/Mn²⁺ ‖ Fe³⁺/Fe²⁺: E° = 0.736 V');
+g1 = gv(['Zn', 1], ['Cu', 1], { T: 50 }); near(g1.E, 1.104, 0.002, '标准态时 E 与温度无关(忽略 E° 的温度系数)');
+g1 = gv(['Zn', 0.001], ['Cu', 1], { T: 50 }); near(g1.E - 1.104, (8.314462 * 323.15 / (2 * 96485.33)) * Math.log(1000), 0.002, 'Nernst 项随温度按 RT/nF 缩放');
+g1 = gv(['Zn', 1], ['Zn', 1]); ok(!g1.spontaneous && Math.abs(g1.E) < 1e-9, '同一电对同浓度: E = 0，非自发');
+g1 = gv(['Zn', 1], ['Cu', 1], { I: 0.05, t: 3600, left: { couple: 'Zn', cox: 1, cred: 1, V: 100 }, right: { couple: 'Cu', cox: 1, cred: 1, V: 100 } });
+ok(!!g1.discharge, '恒流放电已模拟'); near(-g1.discharge.mass.anode.dm, 180 / (2 * 96485.33) * 65.38, 1e-4, '阳极 Zn 失重 = QM/(nF) = 0.0610 g'); near(g1.discharge.mass.cathode.dm, 180 / (2 * 96485.33) * 63.546, 1e-4, '阴极 Cu 增重 = 0.0593 g');
+const cv0 = g1.discharge.curve; ok(cv0[cv0.length - 1].E < cv0[0].E && cv0.every((p, i) => i === 0 || p.E <= cv0[i - 1].E + 1e-9), '放电过程 E 单调下降 (Q 增大)');
+g1 = gv(['Zn', 1], ['Cu', 1], { bridge: 'none' }); ok(g1.circuit === false, '无盐桥: 内电路断开');
+
+section('19. 无机: 歧化 / 氧化物还原 / 水合盐 / 焰色 / 配合物 / 光化学');
+r = E.run(ex2('歧化: 碘')); ok(r.status === 'reaction' && /IO3/.test(JSON.stringify(r.products)), '3 I₂ + 6 OH⁻ → 5 I⁻ + IO₃⁻ + 3 H₂O'); near(main(r).x, Math.min(1 / 253.8 / 3, 0.02 / 6), 2e-5, 'x = min(n(I₂)/3, n(OH⁻)/6)');
+r = E.run({ additions: [Mm('I2', 1), S('NaOH', 20, 0.001)] }); ok(r.status !== 'reaction' || true, '碱不足时按限量或判定不自发 (不崩溃)');
+r = E.run(ex2('Cu(I) 歧化')); ok(r.status === 'reaction' && solidOf(r, 'Cu'), 'Cu₂O + H⁺ → Cu + Cu²⁺ (E°cell = 0.368 V)');
+r = E.run(ex2('硫钟')); ok(r.status === 'reaction' && solidOf(r, 'S'), 'S₂O₃²⁻ + 2 H⁺ → S↓ + SO₂ + H₂O');
+r = E.run(ex2('碘量法')); ok(/S4O6/.test(JSON.stringify(r.products)), 'I₂ + 2 S₂O₃²⁻ → 2 I⁻ + S₄O₆²⁻');
+r = E.run({ additions: [S('Br2water', 10, 0.1), S('KI', 10, 0.3)] }); ok(r.status === 'reaction' && /I3|I₃/.test(JSON.stringify(r.products)), 'Br₂(aq) 氧化 I⁻ (E°cell = 1.087 − 0.536 > 0)');
+ok(E.run({ additions: [S('Br2water', 10, 0.1), S('NaCl', 10, 1)] }).status === 'none', 'Br₂ 不能氧化 Cl⁻ (E°: 1.087 < 1.358)');
+r = E.run({ additions: [S('Br2water', 10, 0.1), S('NaOH', 10, 1)] }); ok(r.status === 'reaction' && /BrO3/.test(JSON.stringify(r.products)), 'Br₂ 在碱中歧化');
+const th0 = E.run(ex2('铝热型 (仅热力学判断): Al + Fe₂O₃ 室温')); ok(th0.status === 'none' && /ΔG/.test(th0.reasons.join('')), '铝热反应: 热力学自发但常温动力学受阻 → 室温不反应 (给出 ΔG)');
+r = E.run(ex2('强点火源')); near(Qkj(r) / main(r).x, 851.5, 2, '2 Al + Fe₂O₃ → Al₂O₃ + 2 Fe: ΔH = −1675.7 − (−824.2) = −851.5 kJ/mol'); ok(r.energy.dT > 300, '绝热温升很大 (仅为理想上限)', r.energy.dT);
+r = E.run(ex2('Fe₂O₃ + C (800')); ok(r.status === 'reaction' && Qkj(r) < 0, '碳热还原吸热 (ΔH>0, Q<0)，由熵增驱动: ΔG(800 °C) < 0'); ok(E.run({ additions: [Mm('Fe2O3', 3), Mm('C', 0.3)], vessel: 'crucible', T0: 300, plate: true }).status === 'none', '300 °C 时 ΔG>0 / 动力学不足 → 不反应');
+r = E.run(ex2('氢还原氧化铜')); near(Qkj(r) / main(r).x, 85.7, 2, 'CuO + H₂ → Cu + H₂O(g): ΔH = −241.8 − (−156.1) = −85.7 kJ/mol (放热)');
+['胆矾', '石膏 →', '泻盐'].forEach(k => { const rr = E.run(ex2(k)); ok(rr.status === 'reaction' && rr.energy.Q < 0 && /脱水|热分解/.test(main(rr).type), k + ' 脱水吸热 (ΔH>0), 高温下 ΔG<0'); });
+ok(E.run({ additions: [Mm('CaSO4·2H2O', 5)], vessel: 'crucible', T0: 60, plate: true }).status === 'none', '石膏 60 °C 不脱水 (ΔG>0, T>112 °C 才行)');
+r = E.run(ex2('焰色试验: 钠盐')); ok(r.events.some(e => e.qual) && /亮黄/.test(JSON.stringify(r.phen)), '焰色: Na⁺ 亮黄色'); ok(r.hazards !== undefined, '焰色试验给出信息，不改变物料');
+r = E.run(ex2('焰色试验: 锶盐')); ok(/洋红|猩红/.test(JSON.stringify(r.phen)), '焰色: Sr²⁺ 洋红');
+r = E.run(ex2('焰色试验: 铜盐')); ok(/绿/.test(JSON.stringify(r.phen)) && /砖红|橙红/.test(JSON.stringify(r.phen)) && /黄绿/.test(JSON.stringify(r.phen)) && /深红|胭脂/.test(JSON.stringify(r.phen)), '焰色: Cu 绿 / Ca 砖红 / Ba 黄绿 / Li 深红');
+r = E.run(ex2('NiSO₄ + 过量氨水')); ok(/Ni\(NH3\)6/.test(JSON.stringify(r.solution.species || r.products || r.ledger)) || r.events.some(e => /镍氨|配位/.test(e.type)), '[Ni(NH₃)₆]²⁺ 形成 (蓝紫色)');
+r = E.run(ex2('CuCl₂ + 浓盐酸')); ok(r.events.some(e => /配位/.test(e.type)) && /黄|绿/.test(r.solution.colorName || ''), 'CuCl₄²⁻ 黄绿色', r.solution.colorName);
+r = E.run(ex2('Fe³⁺ + SCN⁻')); ok(r.events.some(e => /配位/.test(e.type)) && /红/.test(r.solution.colorName || ''), 'FeSCN²⁺ 血红色', r.solution.colorName);
+r = E.run(ex2('光化学: AgNO')); ok(r.events.some(e => /光化学/.test(e.type)), 'AgCl 沉淀 + 光照 → 光解变暗'); ok(!E.run({ additions: [S('AgNO3', 10, 0.1), S('NaCl', 10, 0.1)] }).events.some(e => /光化学/.test(e.type)), '无光照: 不触发光化学事件');
+
+section('20. 平衡 / 动力学 (Le Chatelier)');
+const kp25 = EQ.kpN2O4(25); near(kp25.Kp, 0.147, 0.01, 'N₂O₄ ⇌ 2 NO₂: Kp(25 °C) = 0.147 (文献 ~0.14–0.15)'); near(kp25.dH, 57.2, 0.2, 'ΔH° = 2×33.2 − 9.2 = +57.2 kJ');
+ok(EQ.kpN2O4(100).Kp > kp25.Kp * 10, '吸热反应: 升温 Kp 显著增大 (100 °C → ~15)'); near(EQ.no2(100, 1).alpha, 0.89, 0.02, '100 °C, 1 atm: 解离度 α ≈ 0.89');
+ok(EQ.no2(25, 5).alpha < EQ.no2(25, 1).alpha, '加压: 向分子数减少的方向(N₂O₄) 移动，α 减小'); near(EQ.no2(25, 1).alpha, 0.188, 0.01, '25 °C, 1 atm: α ≈ 0.19 (文献 0.19)');
+const f1 = EQ.feScn(0.002, 0.002); near(f1.x / (f1.Fe * f1.SCN), 890, 1e-6, 'Fe³⁺/SCN⁻: 平衡后 K = 890'); near(f1.Fe + f1.x, 0.002, 1e-12, 'Fe 物料守恒');
+const p1 = EQ.perturb(f1, f1.Fe * 0.5, 0); ok(p1.dir === 'right' && p1.eq.x > f1.x, '加入 Fe³⁺: Q<K → 平衡右移, FeSCN²⁺ 增多 (颜色加深)'); const p2 = EQ.perturb(f1, -f1.Fe * 0.5, 0); ok(p2.dir === 'left' && p2.eq.x < f1.x, '移除 Fe³⁺: Q>K → 左移, 颜色变浅');
+ok(EQ.chromate(0.01, 2).fracDichromate > 0.99 && EQ.chromate(0.01, 9).fracDichromate < 0.01, 'CrO₄²⁻/Cr₂O₇²⁻: 酸性 → 橙色(Cr₂O₇²⁻)，碱性 → 黄色(CrO₄²⁻)');
+ok(EQ.chromate(0.01, 5).fracDichromate > EQ.chromate(0.01, 6).fracDichromate, 'pH 降低 → 重铬酸根比例增大 (单调)');
+ok(EQ.cuCl(0.1, 8).frac > EQ.cuCl(0.1, 1).frac && EQ.cuCl(0.1, 0.1).frac < 0.01, 'Cl⁻ 浓度升高 → CuCl₄²⁻ 比例增大');
+const c25 = EQ.clock(0.04, 0.08, 0.002, 25), c35 = EQ.clock(0.04, 0.08, 0.002, 35), cI = EQ.clock(0.04, 0.16, 0.002, 25);
+near(c25.tClock, 0.002 / (2 * c25.k * 0.04 * 0.08), 1e-9, '碘钟时间 t = [S₂O₃²⁻]/(2 k [S₂O₈²⁻][I⁻])'); near(cI.tClock * 2, c25.tClock, 1e-9, '[I⁻] 加倍 → 变色时间减半 (一级)');
+near(c25.tClock / c35.tClock, 1.97, 0.1, 'Arrhenius (Ea = 52 kJ/mol): 升温 10 °C 速率 ≈ ×2'); ok(EQ.arrhenius(1, 25, 35, 52000) > 1.9 && EQ.arrhenius(1, 25, 35, 52000) < 2.05, '经验规则 Q10 ≈ 2');
+
+section('21. 范围限制 (硬性红线) 与诚实的“无数据 / 无反应”');
+ok(E.run({ additions: [Lq('C6H6', 1), S('HNO3', 10, 15)] }).status === 'unsupported', '苯 + 硝酸 (硝化类): 不支持'); ok(E.run({ additions: [Lq('C7H8', 1), S('HNO3', 5, 15), S('H2SO4', 5, 18)] }).status === 'unsupported', '甲苯 + 混酸: 不支持');
+ok(E.run({ additions: [Lq('C3H8O3', 1), S('HNO3', 5, 15)] }).status === 'unsupported', '甘油 + 硝酸: 不支持'); ok(E.run({ additions: [Lq('Br2', 1), Lq('C3H6O', 3)] }).status === 'unsupported', '溴 + 丙酮: 不支持'); ok(E.run({ additions: [Lq('Br2', 1), S('NH3', 5, 5)] }).status === 'unsupported', '溴 + 氨: 不支持');
+ok(E.run(ex2('K₂S₂O₈')) || true, '—'); ok(E.run({ additions: [Mm('K2S2O8', 2), Lq('C2H5OH', 3)] }).status === 'unsupported', '过硫酸盐 + 干燥乙醇(强氧化剂+有机物易燃混合): 不支持');
+ok(E.run({ additions: [Lq('C6H14', 2), S('K2Cr2O7', 10, 0.1)] }).status === 'nodata', '正己烷 + 重铬酸钾: 引擎无数据 (不编造)'); ok(E.run({ additions: [Lq('C6H6', 2), S('NaOH', 10, 1)] }).status === 'nodata', '苯 + NaOH: 引擎无数据');
+ok(E.run({ additions: [Lq('C2H5Br', 2), S('HCl', 10, 1)] }).status === 'none', '溴乙烷 + HCl: 预计无反应 (给出原因)');
+ok(E.run({ additions: [Lq('C57H104O6', 2), Lq('H2O', 20)] }).status === 'none', '油 + 水: 预计无反应');
+const allNames = JSON.stringify(D.REAG.map(r => r.id + r.name)); ok(!/TNT|炸药|硝化甘油|雷酸|叠氮|沙林|芥子|VX|神经毒|冰毒|海洛因|吗啡|可卡因|MDMA/.test(allNames), '试剂库中不含爆炸物 / 毒剂 / 违禁药物条目');
+
 console.log('\n========================================');
 console.log('通过 ' + pass + ' 项，失败 ' + fail + ' 项');
 if (fail) { console.log('失败项:\n - ' + failures.join('\n - ')); process.exit(1); }

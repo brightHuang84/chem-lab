@@ -337,7 +337,7 @@
             const xmaxP = Math.min(a, o);
       if (x > 0) {
         let rem = x; const parts = [[E.acid[0], Math.min(a1, rem)]]; rem -= parts[0][1]; if (rem > 1e-12) parts.push([E.acid[1], rem]);
-        parts.forEach(([ac, xx]) => { if (xx > 1e-12) { if (ctx.rxn({ type: '酯化(可逆平衡)', name: E.name, react: { [ac]: 1, [E.alc]: 1 }, prod: { [E.ester]: 1, H2O: 1 }, x: xx, why: '平衡常数 K = [酯][水]/([酸][醇]) ≈ ' + K + ' (25–100 °C 近似); 解 (e+x)(w+x) = K(a−x)(o−x) 得平衡进度；酸催化只加快速率，不改变平衡', ph: [{ k: 'smell', text: '果香味(乙酸酯)' }], xmaxPossible: xmaxP, tol: 1e-12 }) > 0) ch = true; } });
+        parts.forEach(([ac, xx]) => { if (xx > 1e-12) { if (ctx.rxn({ type: '酯化(可逆平衡)', name: E.name, react: { [ac]: 1, [E.alc]: 1 }, prod: { [E.ester]: 1, H2O: 1 }, x: xx, why: '平衡常数 K = [酯][水]/([酸][醇]) ≈ ' + K + ' (25–100 °C 近似); 解 (e+x)(w+x) = K(a−x)(o−x) 得平衡进度；酸催化只加快速率，不改变平衡', ph: [{ k: 'smell', text: E.smell || '果香味(乙酸酯)' }], xmaxPossible: xmaxP, tol: 1e-12 }) > 0) ch = true; } });
         ctx._esterEq = { K, xeq: x, xmax: xmaxP, E };
       } else {
         if (ctx.rxn({ type: '酯水解(逆向)', name: '酯水解: ' + E.name, react: { [E.ester]: 1, H2O: 1 }, prod: { [E.acid[0]]: 1, [E.alc]: 1 }, x: -x, why: '水多时平衡向酯水解方向移动 (K=' + K + ')', tol: 1e-12 }) > 0) ch = true;
@@ -514,12 +514,15 @@
   }
 
   // ============ 主循环 ============
+  const HOOKS = { early: [], mid: [], late: [] };
+  function runHooks(arr, ctx) { let c = false; arr.forEach(f => { if (f(ctx)) c = true; }); return c; }
   function loopRules(ctx) {
     for (let it = 0; it < 80; it++) {
       let ch = false;
       if (rDissolve(ctx)) ch = true;
       if (rCaO(ctx)) ch = true;
       if (rCuI(ctx)) ch = true;
+      if (runHooks(HOOKS.early, ctx)) ch = true;
       if (rRedox(ctx)) ch = true;
       if (rAirOxid(ctx)) ch = true;
       if (rAcidBase(ctx)) ch = true;
@@ -528,14 +531,16 @@
       if (rDoubleHyd(ctx)) ch = true;
       if (rGas(ctx)) ch = true;
       if (rEquilibria(ctx)) ch = true;
+      if (runHooks(HOOKS.mid, ctx)) ch = true;
       if (rOrganic(ctx)) ch = true;
       if (rConcAcid(ctx)) ch = true;
       if (rThermal(ctx)) ch = true;
       if (rDry(ctx)) ch = true;
+      if (runHooks(HOOKS.late, ctx)) ch = true;
       if (!ch) break;
     }
   }
 
-  B.rules = { loopRules, rDissolve, ionPairReasons, halfName, F2, nm, decThermo, DEC, FUELS };
+  B.rules = { HOOKS, ESTERS, loopRules, rDissolve, ionPairReasons, halfName, F2, nm, decThermo, DEC, FUELS };
   if (typeof module !== 'undefined' && module.exports) module.exports = B;
 })(typeof window !== 'undefined' ? window : globalThis);

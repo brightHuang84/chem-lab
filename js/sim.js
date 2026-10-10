@@ -1,7 +1,7 @@
 /* 虚拟化学实验室 —— 实验运行、结果整理、电解、滴定 */
 (function (g) {
   'use strict';
-  const B = (typeof require !== 'undefined' && typeof module !== 'undefined') ? require('./react.js') : g.__EngineBase;
+  const B = (typeof require !== 'undefined' && typeof module !== 'undefined') ? (require('./react.js'), require('./react2.js')) : g.__EngineBase;
   const { D, SP, REAGBY, dispId, plain, intify, eqHTML, fnum, computePH, speciation, solutionColor, colorName, indicatorColor, Ctx, buildLedger, excessH2SO4, checkBlocked, CNAME, GASINFO, waterGrams, R_GAS, FARA, interp } = B;
   const RU = B.rules;
   D.REAG.forEach(r => { if (r.id === 'H2SO4') r.molIons = { 'H+': 2, 'SO4^2-': 1 }; });
@@ -135,15 +135,20 @@
     if (!ctx.aq()) { out.fail = '电解需要含离子的水溶液 (电解质)。'; return out; }
     const pH0 = ctx.pH(); const Vl = ctx.Vl();
     const ETA = { H2: 0.3, O2: 0.5, Cl2: 0.1 };
-    let eLeft = out.I * out.t / FARA; out.molE = eLeft; out.W = out.V * out.I * out.t / 1000;
+    // 金属沉积表面上的析氢过电势 (V): 过电势越大, 该金属越容易在 H⁺ 还原之前沉积 (锌、铅镀层即靠此)
+    const ETAON = { Ag: 0.2, Cu: 0.25, Ni: 0.35, Zn: 0.75, Pb: 0.9 };
+    const AMET = { copper: { m: 'Cu', ion: 'Cu^2+', z: 2, E: 0.342 }, silver: { m: 'Ag', ion: 'Ag+', z: 1, E: 0.7996 }, nickel: { m: 'Ni', ion: 'Ni^2+', z: 2, E: -0.257 }, zinc: { m: 'Zn', ion: 'Zn^2+', z: 2, E: -0.762 } };
+    out.eff = p.eff === undefined || p.eff === '' || isNaN(+p.eff) ? 100 : Math.max(1, Math.min(100, +p.eff)); out.area = +p.area || 0; out.anodeLoss = {}; out.deposit = {};
+    let eLeft = out.I * out.t / FARA * out.eff / 100; out.molE = eLeft; out.W = out.V * out.I * out.t / 1000;
     for (let st = 0; st < 6 && eLeft > 1e-12; st++) {
       const pH = ctx.pH();
       const cathodes = [];
-      [['Ag+', 'Ag', 1, 0.7996], ['Cu^2+', 'Cu', 2, 0.342], ['Fe^3+', 'Fe^2+', 1, 0.771], ['Pb^2+', 'Pb', 2, -0.126], ['Zn^2+', 'Zn', 2, -0.762]].forEach(([ion, pr, z, E]) => { if (ctx.n(ion) > 1e-9) cathodes.push({ type: 'M', ion, prod: pr, z, E, cap: ctx.n(ion) * z }); });
-      cathodes.push({ type: 'H2', E: -0.05916 * pH - ETA.H2, z: 2, cap: Infinity, name: pH < 6 ? '2H⁺ + 2e⁻ → H₂' : '2H₂O + 2e⁻ → H₂ + 2OH⁻' });
+      [['Ag+', 'Ag', 1, 0.7996], ['Cu^2+', 'Cu', 2, 0.342], ['Fe^3+', 'Fe^2+', 1, 0.771], ['Ni^2+', 'Ni', 2, -0.257], ['Pb^2+', 'Pb', 2, -0.126], ['Zn^2+', 'Zn', 2, -0.762]].forEach(([ion, pr, z, E]) => { if (ctx.n(ion) > 1e-9) { const eta = ETAON[pr]; if (eta !== undefined && E <= -0.05916 * pH - eta) return; cathodes.push({ type: 'M', ion, prod: pr, z, E, cap: ctx.n(ion) * z }); } });
+      let etaH = ETA.H2; cathodes.forEach(c => { if (c.type === 'M' && ETAON[c.prod] !== undefined) etaH = Math.max(etaH, ETAON[c.prod]); });
+      cathodes.push({ type: 'H2', E: -0.05916 * pH - etaH, z: 2, cap: Infinity, name: pH < 6 ? '2H⁺ + 2e⁻ → H₂' : '2H₂O + 2e⁻ → H₂ + 2OH⁻' });
       cathodes.sort((a, b) => b.E - a.E); const cat = cathodes[0];
       const anodes = [];
-      if (out.electrode === 'copper' && ctx.n('Cu') >= 0) anodes.push({ type: 'CuAnode', E: 0.342, z: 2, cap: Infinity });
+      if (AMET[out.electrode]) anodes.push({ type: 'MAnode', m: AMET[out.electrode].m, ion: AMET[out.electrode].ion, mz: AMET[out.electrode].z, E: AMET[out.electrode].E, z: AMET[out.electrode].z, cap: Infinity });
       [['I-', 'I2', 0.536, 2, '2I⁻ → I₂ + 2e⁻'], ['Br-', 'Br2', 1.066, 2], ['Fe^2+', 'Fe^3+', 0.771, 1], ['Cl-', 'Cl2', 1.358 + ETA.Cl2, 2]].forEach(([ion, pr, E, z]) => { if (ctx.n(ion) > 1e-9 && SP[pr]) anodes.push({ type: 'ION', ion, prod: pr, E, z, cap: ctx.n(ion) }); });
       anodes.push({ type: 'O2', E: 1.229 - 0.05916 * pH + ETA.O2, z: 4, cap: Infinity });
       anodes.sort((a, b) => a.E - b.E); const an = anodes[0];
@@ -157,23 +162,41 @@
       else if (pH < 6 && ctx.n('H+') > 1e-9) { add(react, 'H+', ne); add(prod, 'H2', ne / 2); }
       else { add(react, 'H2O', ne); add(prod, 'H2', ne / 2); add(prod, 'OH-', ne); }
       if (an.type === 'ION') { if (an.ion === 'Fe^2+') { add(react, 'Fe^2+', ne); add(prod, 'Fe^3+', ne); } else { add(react, an.ion, ne); add(prod, an.prod, ne / 2); } }
-      else if (an.type === 'CuAnode') { add(react, 'Cu', ne / 2); add(prod, 'Cu^2+', ne / 2); }
+      else if (an.type === 'MAnode') { add(react, an.m, ne / an.mz); add(prod, an.ion, ne / an.mz); }
       else { add(react, 'H2O', ne / 2); add(prod, 'O2', ne / 4); add(prod, 'H+', ne); }
       Object.keys(react).forEach(k => { if (k in prod) { const m = Math.min(react[k], prod[k]); react[k] -= m; prod[k] -= m; } });
       Object.keys(react).forEach(k => { if (react[k] < 1e-12) delete react[k]; }); Object.keys(prod).forEach(k => { if (prod[k] < 1e-12) delete prod[k]; });
       let x = eLeft;
-      for (const k in react) { if (k === 'H2O' || k === 'Cu' && an.type === 'CuAnode') continue; x = Math.min(x, ctx.n(k) / react[k]); }
+      for (const k in react) { if (k === 'H2O' || an.type === 'MAnode' && k === an.m) continue; x = Math.min(x, ctx.n(k) / react[k]); }
       if (x < 1e-12) break;
       const ph = []; if (cat.type === 'M') ph.push({ k: 'deposit' }); if (prod.H2) ph.push({ k: 'bubbles', gas: 'H2' }); if (prod.O2) ph.push({ k: 'bubbles', gas: 'O2' }); if (prod.Cl2) ph.push({ k: 'bubbles', gas: 'Cl2' });
+      if (!Object.keys(react).length && !Object.keys(prod).length) { // 活性阳极与阴极为同一金属: 净效应仅是金属从阳极转移到阴极 (电镀/精炼)
+        const eqt = D.fmt(an.m) + '(阳极) → ' + D.fmt(cat.prod) + '(阴极上的镀层)';
+        if (!ctx._plateEv) { ctx._plateEv = true; ctx.events.push({ type: '电镀 (金属转移)', name: '阳极 ' + SP[an.m].cn + ' 溶解，阴极析出同种金属', react: {}, prod: {}, x: 0, dHu: 0, minor: false, qual: true, eqText: eqt, why: '阳极 ' + D.fmt(an.m) + ' → ' + D.fmt(an.ion) + ' + ' + an.mz + 'e⁻，阴极 ' + D.fmt(cat.ion) + ' + ' + cat.z + 'e⁻ → ' + D.fmt(cat.prod) + '：两极半反应相消，电解液组成基本不变；电镀/电解精炼的原理 (理论分解电压≈0，只需克服过电势与溶液电阻)。', ph: [{ k: 'deposit' }] }); }
+        eLeft -= x; out.anodeLoss[an.m] = (out.anodeLoss[an.m] || 0) + x / an.mz; out.deposit[cat.prod] = (out.deposit[cat.prod] || 0) + x / cat.z; out.stages.push({ cat: cat.ion, an: an.m, ne: x }); continue;
+      }
+      if (an.type === 'MAnode' && react[an.m]) ctx.add(an.m, react[an.m] * x);
       const done = ctx.rxn({ type: '电解', name: '电解: 阴极 ' + (cat.type === 'M' ? D.fmt(cat.ion) : 'H₂') + ' / 阳极 ' + describeAnode(an), react, prod, x, why: '电解(直流): 电荷 ' + fnum(x * FARA, 0) + ' C = ' + fnum(x, 4) + ' mol e⁻ (法拉第定律 n = Q/F)；E分解 = ' + fnum(Edec, 2) + ' V < 外加电压', ph, noHeat: true, tol: 1e-12 });
-      if (done <= 0) break; eLeft -= done; out.stages.push({ cat: cat.type === 'M' ? cat.ion : 'H2', an: an.type === 'ION' ? an.ion : an.type, ne: done });
+      if (done <= 0) break; eLeft -= done;
+      if (an.type === 'MAnode') out.anodeLoss[an.m] = (out.anodeLoss[an.m] || 0) + done / an.mz;
+      if (cat.type === 'M') out.deposit[cat.prod] = (out.deposit[cat.prod] || 0) + done / cat.z;
+      out.stages.push({ cat: cat.type === 'M' ? cat.ion : 'H2', an: an.type === 'ION' ? an.ion : an.type, ne: done });
       if (an.type === 'ION' && an.ion === 'Cl-') { ctx.hz('阳极产生的 Cl₂ 有毒且有强烈刺激性，需通风/吸收'); }
     }
     out.molEUsed = out.molE - Math.max(eLeft, 0);
+    if (out.eff < 100) out.lines.push('电流效率 ' + fnum(out.eff, 0) + '%: 只有这一比例的电荷用于主反应 (其余用于析氢等副反应)，有效电子 = ' + fnum(out.molE, 5) + ' mol');
+    out.plating = [];
+    Object.keys(out.deposit).forEach(m => {
+      const mol = out.deposit[m], mass = mol * SP[m].M, rho = REAGBY[m] && REAGBY[m].rho; const o = { metal: m, mol, mass, rho };
+      if (out.area > 0 && rho) o.thickness = mass / (rho * out.area) * 1e4; // μm
+      out.plating.push(o);
+      out.lines.push('法拉第定律: 阴极沉积 ' + D.fmt(m) + ' = Q·η·M/(zF) → n = ' + fnum(mol * 1000, 4) + ' mmol，m = ' + fnum(mass, 4) + ' g' + (o.thickness ? '；阴极面积 ' + fnum(out.area, 1) + ' cm²、ρ = ' + rho + ' g/cm³ → 镀层厚度 δ = m/(ρA) ≈ ' + fnum(o.thickness, 2) + ' μm' : ''));
+    });
+    Object.keys(out.anodeLoss).forEach(m => out.lines.push('阳极(' + D.fmt(m) + ' 电极)溶解 ' + fnum(out.anodeLoss[m] * 1000, 4) + ' mmol = ' + fnum(out.anodeLoss[m] * SP[m].M, 4) + ' g (溶液中金属离子浓度基本保持不变: 阳极补充阴极消耗)'));
     RU.loopRules(ctx);
     return out;
   }
-  function describeAnode(an) { if (an.type === 'ION') return an.ion === 'Fe^2+' ? 'Fe²⁺ → Fe³⁺' : D.fmt(an.ion) + ' → ' + D.fmt(an.prod); if (an.type === 'CuAnode') return 'Cu → Cu²⁺ (铜电极溶解)'; return '2H₂O → O₂ + 4H⁺ + 4e⁻'; }
+  function describeAnode(an) { if (an.type === 'ION') return an.ion === 'Fe^2+' ? 'Fe²⁺ → Fe³⁺' : D.fmt(an.ion) + ' → ' + D.fmt(an.prod); if (an.type === 'MAnode') return D.fmt(an.m) + ' → ' + D.fmt(an.ion) + ' (' + SP[an.m].cn + '电极溶解)'; return '2H₂O → O₂ + 4H⁺ + 4e⁻'; }
 
   // ---------- 结果整理 ----------
   function finalize(ctx, setup, vessel, elec) {
@@ -192,6 +215,8 @@
     }
     const C = ctx.cpSum + vessel.cv; // J/K
     const combustion = !!ctx.combustion;
+    const incomplete = ctx.missingH.size > 0 && !combustion;
+    if (incomplete) Q = 0;
     let dT = C > 0 ? Q * 1000 / C : 0;
     let Tfinal = ctx.T0 + dT; let boiled = 0, iceG = 0;
     const holdT = setup.plate || setup.ice;
@@ -199,7 +224,7 @@
     if (combustion) { Tfinal = null; }
     else if (holdT) { if (setup.ice) iceG = Math.abs(Q) * 1000 / 334; Tfinal = ctx.T0; }
     else if (Tfinal > bp && aq) { const over = (Tfinal - bp) * C; boiled = over / 2260; Tfinal = bp; }
-    res.energy = { dH: ctx.dH, Q, C, dT, T0: ctx.T0, Tfinal, boiled, iceG, hold: !!holdT, combustion, excessNote, mass: ctx.mass, cv: vessel.cv, missing: Array.from(ctx.missingH) };
+    res.energy = { incomplete, dH: incomplete ? null : ctx.dH, Q, C, dT, T0: ctx.T0, Tfinal, boiled, iceG, hold: !!holdT, combustion, excessNote, mass: ctx.mass, cv: vessel.cv, missing: Array.from(ctx.missingH) };
     const Tcalc = Tfinal === null ? 25 : Tfinal; ctx.Tfinal = Tcalc;
     // ---- 事件整理 ----
     const nonminor = ctx.events.filter(e => !e.minor);
@@ -229,7 +254,10 @@
     Object.keys(ctx.L).forEach(id => {
       const sp = SP[id]; const n = ctx.L[id]; if (!sp || n < 1e-9) return;
       if (sp.ph === 'g' && id !== 'O2' || (id === 'O2' && !ctx.combustion && n > 1e-9)) res.gases.push({ id, name: sp.cn, n, V_T: n * R_GAS * pK / 101.325, V_STP: n * 22.414, info: GASINFO[id] || {}, html: dispId(id) });
-      if (sp.ph === 's') { const added = (ctx.added && ctx.added[id]) || 0; res.solids.push({ id, name: sp.cn, n, m: n * sp.M, added, formed: Math.max(0, n - added), col: sp.col, cname: CNAME[id] || '', html: dispId(id) }); }
+      if (sp.ph === 's') {
+        let nShow = n; const rg = REAGBY[id]; // 易溶的分子型固体(葡萄糖、蔗糖、尿素…)按溶解度判断溶解部分，不再误显示为"未溶固体"
+        if (rg && rg.sol && !rg.diss && ctx.L['H2O'] > 0.5 && (ctx.added && ctx.added[id])) { const cap = interp(rg.sol, ctx.T) * waterGrams(ctx.L) / 100 / sp.M; nShow = Math.max(0, n - cap); if (nShow < 1e-9) { (res.dissolvedMol = res.dissolvedMol || []).push({ id, name: sp.cn, n }); return; } }
+        const added = (ctx.added && ctx.added[id]) || 0; res.solids.push({ id, name: sp.cn, n: nShow, m: nShow * sp.M, added, formed: Math.max(0, nShow - added), col: sp.col, cname: CNAME[id] || '', html: dispId(id) }); }
     });
     res.gases.sort((a, b) => b.n - a.n);
     // 理论产量: 以限量试剂完全转化计 (可逆反应用 xmaxPossible)
@@ -266,6 +294,8 @@
     });
     // ---- 限量试剂 ----
     res.limiting = nonminor.filter(e => e.limiting && !e.qual).map(e => ({ event: e.name, id: e.limiting, name: plainName(e.limiting) }));
+    { const ap = new Set(); ctx.events.forEach(e => { if (e.qual) return; Object.keys(e.react).concat(Object.keys(e.prod)).forEach(id => { if (SP[id] && SP[id].approx && SP[id].H !== null) ap.add(id); }); });
+      if (ap.size) res.notes.push('热效应使用了近似/类比估算的 ΔfH° (精度有限，约 ±10–20 kJ/mol): ' + Array.from(ap).map(i => plain(dispId(i))).join('、')); }
     // ---- 状态与理由 ----
     const reasons = [];
     const seenRe = new Set();
@@ -285,12 +315,14 @@
       const orgIds = Array.from(ctx.ids).filter(i => REAGBY[i].cat === '有机物' && i !== 'H2O');
       const REACTIVE = ['KMnO4', 'K2Cr2O7', 'H2O2', 'HNO3', 'I2', 'Na', 'K', 'Ca', 'Mg', 'Al', 'AgNO3', 'CuSO4', 'CuCl2', 'CuSO4·5H2O'];
       const nodataPairs = [];
-      orgIds.forEach(o => { Array.from(ctx.ids).forEach(x => { if (x === o) return; if (REACTIVE.includes(x) && !['AgNO3', 'CuSO4', 'CuCl2', 'CuSO4·5H2O'].includes(x)) nodataPairs.push(REAGBY[o].name + ' × ' + REAGBY[x].name); }); });
+      orgIds.forEach(o => { Array.from(ctx.ids).forEach(x => { if (x === o) return; if (ctx.cov && ctx.cov[o + '|' + x]) return; if (REACTIVE.includes(x) && !['AgNO3', 'CuSO4', 'CuCl2', 'CuSO4·5H2O'].includes(x)) nodataPairs.push(REAGBY[o].name + ' × ' + REAGBY[x].name); }); });
       if (ctx.ids.has('H2SO4') && orgIds.length && ctx.cSO4() >= 10) nodataPairs.push('有机物 × 浓硫酸');
-      if ((ctx.ids.has('NaOH') || ctx.ids.has('KOH')) && ctx.ids.has('C3H6O')) nodataPairs.push('丙酮 × 强碱 (羟醛缩合等)');
+      if ((ctx.ids.has('NaOH') || ctx.ids.has('KOH')) && ctx.ids.has('C3H6O') && !(ctx.cov && (ctx.cov['C3H6O|NaOH'] || ctx.cov['C3H6O|KOH']))) nodataPairs.push('丙酮 × 强碱 (羟醛缩合等)');
       if (ctx.ids.has('AgNO3') && orgIds.some(o => ['C6H12O6'].includes(o))) nodataPairs.push('葡萄糖 × 银离子 (银镜需碱性氨溶液体系)');
       if (ctx.ids.has('C6H12O6') && (ctx.ids.has('CuSO4') || ctx.ids.has('CuSO4·5H2O')) && (ctx.ids.has('NaOH') || ctx.ids.has('KOH'))) nodataPairs.push('葡萄糖 × Cu²⁺/碱 (斐林/本尼迪特反应)');
-      if (ctx.ids.size === 1 && !physical) { res.status = 'physical'; res.verdict = '单一试剂，无化学反应'; rs.length = 0; rs.push('只加入了一种试剂：没有可相互反应的对象。若是弱酸/弱碱溶液，只存在电离平衡 (由 Ka/Kb 决定 pH)，不属于化学反应。'); }
+      if (ctx.cov) Object.keys(ctx.cov).forEach(k => { const [o2, x2] = k.split('|'); if (ctx.ids.has(o2) && ctx.ids.has(x2)) rs.push(ctx.cov[k]); });
+      if (ctx.ids.size === 1 && !physical && ctx._denied && ctx._denied.length) { res.status = 'none'; res.verdict = '预计无反应'; }
+      else if (ctx.ids.size === 1 && !physical) { res.status = 'physical'; res.verdict = '单一试剂，无化学反应'; rs.length = 0; rs.push('只加入了一种试剂：没有可相互反应的对象。若是弱酸/弱碱溶液，只存在电离平衡 (由 Ka/Kb 决定 pH)，不属于化学反应。'); }
       else if (nodataPairs.length) { res.status = 'nodata'; res.verdict = '引擎无数据'; res.nodata = nodataPairs; rs.unshift('规则库中没有以下组合的反应数据，引擎不会凭空编造结果: ' + nodataPairs.join('；')); }
       else if (physical && !rs.length) { res.status = 'physical'; res.verdict = '仅发生溶解/混合/稀释，无化学反应'; }
       else if (rs.length) { res.status = physical ? 'physical' : 'none'; res.verdict = physical ? '无化学反应 (仅溶解/混合)' : '预计无反应'; }
@@ -335,7 +367,8 @@
     ctx.events.forEach(e => (e.ph || []).forEach(p => { if (p.note) push(p.note, 'color'); if (p.k === 'smell' && p.text) push('气味: ' + p.text, 'smell'); if (p.k === 'flame') push(p.text ? '火焰/燃烧: ' + p.text : (p.metal ? '剧烈反应，金属熔成小球游动并发出嘶嘶声' + (p.metal === 'Na' ? '，火焰呈黄色' : (p.metal === 'K' ? '，火焰呈紫色(透过蓝色钴玻璃观察)' : '')) : '剧烈反应'), 'flame'); if (p.k === 'steam') push('有水蒸气/白雾产生', 'steam'); if (p.k === 'smoke') push('产生白色浓烟', 'smoke'); }));
     if (ctx.n('NH3(aq)') > 0 && ctx.conc('NH3(aq)') > 0.1) push('气味: 刺激性氨味 (NH₃ 水溶液)', 'smell');
     const dT = res.energy.dT;
-    if (!res.energy.combustion) { if (dT >= 1) push('放热: 理想绝热温升 ΔT ≈ +' + fnum(dT, 2) + ' K' + (dT >= 20 ? '，容器明显发烫' : (dT >= 5 ? '，容器变热' : '，仅略微升温')), 'heat'); else if (dT <= -1) push('吸热: 温度降低 ΔT ≈ ' + fnum(dT, 2) + ' K' + (dT <= -5 ? '，容器变冷' : ''), 'cold'); else if (res.status === 'reaction') push('热效应很小 (|ΔT| < 1 K)', 'heat'); }
+    if (res.energy.incomplete) push('热效应: 反应涉及缺少 ΔfH° 数据的物种，温度变化无法计算 (未编造数值)', 'heat');
+    else if (!res.energy.combustion) { if (dT >= 1) push('放热: 理想绝热温升 ΔT ≈ +' + fnum(dT, 2) + ' K' + (dT >= 20 ? '，容器明显发烫' : (dT >= 5 ? '，容器变热' : '，仅略微升温')), 'heat'); else if (dT <= -1) push('吸热: 温度降低 ΔT ≈ ' + fnum(dT, 2) + ' K' + (dT <= -5 ? '，容器变冷' : ''), 'cold'); else if (res.status === 'reaction') push('热效应很小 (|ΔT| < 1 K)', 'heat'); }
     if (res.energy.boiled > 0) push('体系放热使溶液沸腾，约 ' + fnum(res.energy.boiled, 1) + ' g 水被汽化(蒸汽/飞溅)', 'steam');
     if (res.electro && !res.electro.fail && res.electro.molEUsed > 0) push('电解进行: 通过电荷 ' + fnum(res.electro.molEUsed * FARA, 0) + ' C (' + fnum(res.electro.molEUsed, 4) + ' mol e⁻)，电极上有产物析出', 'electro');
     res.phen = ph;
@@ -397,6 +430,7 @@
     // 反应过程产生的气体 (含溢出后离开体系的)
     ctx.events.forEach(e => (e.ph || []).forEach(p => { if (p.k === 'bubbles' && !a.bubbles.find(b => b.id === p.gas)) a.bubbles.push({ id: p.gas, n: Math.max(e.x, 1e-4), color: (GASINFO[p.gas] || {}).color || 'rgba(255,255,255,.7)' }); if (p.k === 'steam') a.steam = true; if (p.k === 'smoke') a.smoke = true; if (p.k === 'flame' && !a.flame) a.flame = { color: p.color || (ctx.flameInfo && ctx.flameInfo.color) || '#ffb020', metal: p.metal || null }; }));
     res.solids.forEach(s => { if (s.formed > 1e-7) a.precip.push({ id: s.id, color: s.col || '#eee', amount: s.formed * s.m / s.n, metal: ['Cu', 'Ag', 'Fe', 'Zn', 'Pb'].includes(s.id) }); else if (s.n > 1e-7 && ctx.added && ctx.added[s.id]) a.solids.push({ id: s.id, color: s.col || '#ddd', amount: s.n * s.m / s.n }); });
+    if (ctx.flameTestInfo && !a.flame) { a.flame = { color: ctx.flameTestInfo.color }; a.flameStay = true; }
     if (ctx.combustion && !a.flame) a.flame = { color: (ctx.flameInfo && ctx.flameInfo.color) || '#ffb020' };
     if (res.energy.boiled > 0) a.steam = true;
     return a;

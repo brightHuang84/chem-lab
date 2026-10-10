@@ -79,8 +79,8 @@
   }
   function collectSetup() {
     const T = parseFloat($('#tRange').value);
-    const s = { additions: state.adds.map(a => Object.assign({}, a)), vessel: $('#vessel_sel').value, T0: T, plate: $('#plate').checked, ice: $('#ice').checked, catalyst: $('#catalyst').value, atmosphere: $('#atm').value, ignite: $('#ignite').checked, indicator: $('#indicator').value, stir: $('#stir').checked };
-    if ($('#electro').checked) s.electro = { on: true, V: +$('#eV').value, I: +$('#eI').value, t: +$('#eT').value, electrode: $('#eElec').value };
+    const s = { additions: state.adds.map(a => Object.assign({}, a)), vessel: $('#vessel_sel').value, T0: T, plate: $('#plate').checked, ice: $('#ice').checked, catalyst: $('#catalyst').value, atmosphere: $('#atm').value, ignite: $('#ignite').checked, indicator: $('#indicator').value, stir: $('#stir').checked, light: $('#light').checked, flameTest: $('#flameTest').checked, corrosion: $('#corrosion').checked };
+    if ($('#electro').checked) s.electro = { on: true, V: +$('#eV').value, I: +$('#eI').value, t: +$('#eT').value, electrode: $('#eElec').value, eff: +$('#eEff').value || 100, area: +$('#eArea').value || 0 };
     return s;
   }
   function afterAddsChange() {
@@ -110,7 +110,7 @@
   $('#catalyst').innerHTML = D.CATALYSTS.map(v => '<option value="' + v.id + '">' + v.name + '</option>').join('');
   $('#indicator').innerHTML = D.INDICATORS.map(v => '<option value="' + v.id + '">' + v.name + (v.note ? ' (' + v.note + ')' : '') + '</option>').join('');
   $('#tRange').oninput = () => { $('#tVal').textContent = $('#tRange').value; updatePreview(); };
-  ['vessel_sel', 'plate', 'ice', 'stir', 'catalyst', 'atm', 'ignite', 'indicator'].forEach(id => $('#' + id).onchange = () => { if (id === 'ice' && $('#ice').checked) { $('#plate').checked = false; } if (id === 'plate' && $('#plate').checked) $('#ice').checked = false; updatePreview(); });
+  ['vessel_sel', 'plate', 'ice', 'stir', 'catalyst', 'atm', 'ignite', 'indicator', 'light', 'flameTest', 'corrosion'].forEach(id => $('#' + id).onchange = () => { if (id === 'ice' && $('#ice').checked) { $('#plate').checked = false; } if (id === 'plate' && $('#plate').checked) $('#ice').checked = false; updatePreview(); });
   $('#electro').onchange = () => $('#electroBox').classList.toggle('hide', !$('#electro').checked);
   $('#btnClear').onclick = () => { state.adds = []; afterAddsChange(); };
 
@@ -143,14 +143,15 @@
     ['显色: 水杨酸 + FeCl₃ (酚羟基检验)', { additions: [M('C7H6O3', 0.1), Lq('H2O', 50), S('FeCl3', 5, 0.1)] }],
     ['混合无反应: NaCl + KNO₃', { additions: [S('NaCl', 25, 0.1), S('KNO3', 25, 0.1)] }],
   ];
+  if (window.ChemExamples2) window.ChemExamples2.forEach(e => EXAMPLES.push([e[0], e[1]]));
   $('#examples').innerHTML = EXAMPLES.map((e, i) => '<option value="' + i + '">' + e[0] + '</option>').join('');
   function loadSetup(s) {
     state.adds = (s.additions || []).map(a => Object.assign({}, a));
     $('#vessel_sel').value = s.vessel || 'beaker'; $('#tRange').value = s.T0 === undefined ? 25 : s.T0; $('#tVal').textContent = $('#tRange').value;
-    $('#plate').checked = !!s.plate; $('#ice').checked = !!s.ice; $('#stir').checked = !!s.stir; $('#ignite').checked = !!s.ignite;
+    $('#plate').checked = !!s.plate; $('#ice').checked = !!s.ice; $('#stir').checked = !!s.stir; $('#ignite').checked = !!s.ignite; $('#light').checked = !!s.light; $('#flameTest').checked = !!s.flameTest; $('#corrosion').checked = !!s.corrosion;
     $('#catalyst').value = s.catalyst || 'none'; $('#atm').value = s.atmosphere || 'air'; $('#indicator').value = s.indicator || 'none';
     $('#electro').checked = !!(s.electro && s.electro.on); $('#electroBox').classList.toggle('hide', !$('#electro').checked);
-    if (s.electro) { $('#eV').value = s.electro.V; $('#eI').value = s.electro.I; $('#eT').value = s.electro.t; $('#eElec').value = s.electro.electrode || 'graphite'; }
+    if (s.electro) { $('#eV').value = s.electro.V; $('#eI').value = s.electro.I; $('#eT').value = s.electro.t; $('#eElec').value = s.electro.electrode || 'graphite'; $('#eEff').value = s.electro.eff || 100; $('#eArea').value = s.electro.area || 0; }
     afterAddsChange();
   }
   $('#examples').onchange = () => { const e = EXAMPLES[+$('#examples').value]; if (e[1]) { loadSetup(e[1]); react(); } };
@@ -189,8 +190,8 @@
       h += sub('溶液性质', t);
     }
     const en = res.energy; if (en) {
-      let t = '<div class="kv"><div><span>ΔH 总</span><b>' + fnum(en.dH, 3) + ' kJ</b> <small>' + (en.dH < 0 ? '放热' : en.dH > 0 ? '吸热' : '') + '</small></div><div><span>热容 C</span><b>' + fnum(en.C, 1) + ' J/K</b></div>';
-      t += en.combustion ? '<div class="wide"><span>燃烧</span><b>放热 ' + fnum(en.Q, 1) + ' kJ</b> <small>火焰温度不适用 q=mcΔT</small></div>' : '<div><span>ΔT = Q/C</span><b>' + (en.hold ? '恒温' : (en.dT >= 0 ? '+' : '') + fnum(en.dT, 2) + ' K') + '</b></div><div><span>温度</span><b>' + fnum(en.T0, 1) + ' → ' + fnum(en.Tfinal, 1) + ' °C</b></div>';
+      let t = '<div class="kv"><div><span>ΔH 总</span><b>' + (en.incomplete ? '—' : fnum(en.dH, 3) + ' kJ') + '</b> <small>' + (en.incomplete ? '数据缺失' : en.dH < 0 ? '放热' : en.dH > 0 ? '吸热' : '') + '</small></div><div><span>热容 C</span><b>' + fnum(en.C, 1) + ' J/K</b></div>';
+      t += en.combustion ? '<div class="wide"><span>燃烧</span><b>放热 ' + fnum(en.Q, 1) + ' kJ</b> <small>火焰温度不适用 q=mcΔT</small></div>' : '<div><span>ΔT = Q/C</span><b>' + (en.incomplete ? '—' : en.hold ? '恒温' : (en.dT >= 0 ? '+' : '') + fnum(en.dT, 2) + ' K') + '</b></div><div><span>温度</span><b>' + (en.incomplete ? fnum(en.T0, 1) + ' °C (未计算)' : fnum(en.T0, 1) + ' → ' + fnum(en.Tfinal, 1) + ' °C') + '</b></div>';
       t += '</div>'; if (en.hold) t += '<p class="note">温度被' + (state.setup && state.setup.ice ? '冰浴' : '加热板') + '维持恒定' + (en.iceG ? '；约融化 ' + fnum(en.iceG, 1) + ' g 冰' : '') + '。</p>'; if (en.boiled > 0) t += '<p class="note warn">溶液沸腾，约 ' + fnum(en.boiled, 1) + ' g 水汽化。</p>'; if (en.excessNote) t += '<p class="note">' + en.excessNote + '</p>';
       if (en.missing && en.missing.length) t += '<p class="note warn">缺少 ΔfH° 数据的物种: ' + en.missing.map(i => E.dispId(i)).join('、') + '（热效应未计入）</p>';
       h += sub('热效应 q = m·c·ΔT', t);

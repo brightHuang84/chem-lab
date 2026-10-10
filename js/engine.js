@@ -4,7 +4,7 @@
  */
 (function (g) {
   'use strict';
-  const D = (typeof require !== 'undefined' && typeof module !== 'undefined') ? require('./data.js') : g.ChemData;
+  const D = (typeof require !== 'undefined' && typeof module !== 'undefined') ? (require('./data.js'), require('./data2.js')) : g.ChemData;
   const SP = D.SP;
   const R_GAS = 8.314462, FARA = 96485.33, KW = 1e-14;
   const EPS = 1e-12;
@@ -307,7 +307,7 @@
   // ---------------- 安全过滤 ----------------
   const ORG_NITR = ['C3H8O3', 'CH4N2O', 'C7H8', 'C6H6O', 'C7H6O2', 'C7H6O3', 'C9H8O4', 'C6H12O6', 'C12H22O11', 'C2H5OH', 'CH3OH', 'C3H6O', 'C6H14', 'C4H6O3', 'CH3COOC2H5'];
   const ORG_ALL = D.REAG.filter(r => r.cat === '有机物').map(r => r.id);
-  const FUEL_DRY = ['S', 'C', 'Al', 'Mg', 'Zn', 'Fe', 'Ca', 'Na', 'K', 'C6H12O6', 'C12H22O11', 'CH4N2O', 'C6H6O', 'C3H8O3', 'C2H5OH', 'CH3OH', 'C3H6O', 'C6H14', 'C7H8', 'C9H8O4', 'C7H6O3', 'C7H6O2'];
+  const FUEL_DRY = ['C6H6', 'C6H10', 'C8H8', 'C6H7N', 'C7H6O', '(C2H5)2O', '(CH3)2CHOH', '(CH3)3COH', 'C5H12O', 'CH3CHO', 'C57H104O6', 'PS', 'H2N(CH2)6NH2', 'C2H5ONa', 'S', 'C', 'Al', 'Mg', 'Zn', 'Fe', 'Ca', 'Na', 'K', 'C6H12O6', 'C12H22O11', 'CH4N2O', 'C6H6O', 'C3H8O3', 'C2H5OH', 'CH3OH', 'C3H6O', 'C6H14', 'C7H8', 'C9H8O4', 'C7H6O3', 'C7H6O2'];
   function checkBlocked(adds) {
     const ids = {}; adds.forEach(a => { ids[a.rid] = a; });
     const has = k => k in ids;
@@ -324,8 +324,9 @@
     }
     if (has('KMnO4') && has('H2SO4') && ids['H2SO4'].mode === 'solution' && (+ids['H2SO4'].conc) >= 12) return msg;
     if (has('I2') && has('NH3')) return msg;
+    if ((has('Br2') || has('Br2water')) && (has('NH3') || has('C3H6O') || has('C7H8'))) return msg;  // NBr3 / 溴丙酮、苄溴类催泪剂
     if (has('AgNO3') && has('NH3') && (has('NaOH') || has('KOH') || has('Ca(OH)2'))) return msg;
-    const oxSolid = ['KNO3', 'NaNO3', 'KMnO4', 'K2Cr2O7', 'Pb(NO3)2'];
+    const oxSolid = ['KNO3', 'NaNO3', 'KMnO4', 'K2Cr2O7', 'Pb(NO3)2', 'K2S2O8'];
     if (!waterPresent && anyOf(oxSolid)) {
       const fuelsHit = FUEL_DRY.filter(has);
       // 允许的唯一例外: 高锰酸钾 + 液态醇/甘油 的"氧化着火"演示不在此拦截

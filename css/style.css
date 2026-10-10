@@ -158,3 +158,31 @@ ul{margin:0;padding-left:18px}.reasons li,.phen li,.hzl li{margin:2px 0}
 .toast.show{opacity:1;transform:translateX(-50%)}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2b4357;border-radius:4px}::-webkit-scrollbar-track{background:transparent}
 @media (max-width:1100px){body{overflow:auto}#view-bench{grid-template-columns:1fr}.view.on{display:grid}.results{min-height:420px}.equip-grid{grid-template-columns:repeat(2,1fr)}.titr-top{grid-template-columns:1fr}#view-titr{grid-template-columns:1fr}}
+
+/* ---- 第二批: 原电池 / 平衡·动力学 ---- */
+#view-cell{grid-template-columns:330px minmax(0,1fr)}
+#view-equil{grid-template-columns:minmax(0,1fr)}
+.cell-setup{overflow:auto;display:grid;gap:6px;align-content:start}
+.cell-setup label{display:grid;gap:2px;color:var(--mut);font-size:12px}
+.cell-setup input,.cell-setup select{width:100%}
+fieldset.half{border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:grid;gap:5px;margin:0;background:#0e1a24}
+fieldset.half legend{color:var(--acc);font-size:12px;padding:0 4px}
+.cell-main{overflow:auto;display:flex;flex-direction:column;gap:6px;min-height:0}
+.cell-main canvas{width:100%;max-width:820px;height:auto;border-radius:8px;border:1px solid var(--line);align-self:flex-start}
+.cell-report{font-size:12.5px}
+.cellkv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:4px 0}
+.cellkv div{background:#0e1a24;border:1px solid var(--line);border-radius:6px;padding:4px 8px;display:grid}
+.cellkv span{color:var(--mut);font-size:11px}.cellkv b{font-size:13px}
+.ok{color:#6fe0c8}.warn{color:var(--warn)}.small{font-size:11px}
+.eq-grid{overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start}
+.eqcard{background:#0e1a24;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+.eqcard.wide2{grid-column:1 / -1}
+.eqcard h3{margin:0 0 6px;font-size:14px}.eqcard h3 small{color:var(--mut);font-weight:400;margin-left:6px}
+.eq-body{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px;align-items:start}
+#eqClock .eq-body{grid-template-columns:430px minmax(0,1fr)}
+.eq-ctl{display:grid;gap:4px;min-width:0}
+.eq-ctl label{display:block;color:var(--mut);font-size:12px}.eq-ctl label b{color:var(--txt)}.eq-ctl input[type=range]{display:block;margin-top:2px}
+.eq-out{font-size:12px;line-height:1.5}.eq-out p{margin:3px 0}
+canvas.tube{width:90px;height:150px}
+table.tbl{width:100%;border-collapse:collapse;font-size:12px}table.tbl th,table.tbl td{border-bottom:1px solid #1a2d3c;padding:3px 6px;text-align:left;vertical-align:top}table.tbl th{color:var(--mut)}
+@media (max-width:1100px){#view-cell{grid-template-columns:1fr}.eq-grid{grid-template-columns:1fr}#eqClock .eq-body{grid-template-columns:1fr}}

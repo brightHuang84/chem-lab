@@ -263,7 +263,7 @@
   // 离子颜色: [hex, 吸光系数 k(1/M)]
   const IONCOLOR = {
     'Cu^2+': ['#2a9fe0', 6], 'Fe^3+': ['#c98a28', 5], 'Fe^2+': ['#a8d49c', 1.5], 'MnO4-': ['#8e1fb0', 40], 'Cr2O7^2-': ['#ee7a14', 10], 'CrO4^2-': ['#f2d716', 14],
-    'Cr^3+': ['#2e8b57', 3], 'I3-': ['#7a3b10', 18], 'Cu(NH3)4^2+': ['#1b3fc7', 12], 'FeSCN^2+': ['#c4161c', 60], 'Mn^2+': ['#f0c4d0', 0.4], 'Ni^2+': ['#4fbf6f', 2],
+    'Cr^3+': ['#2e8b57', 3], 'I3-': ['#7a3b10', 18], 'Cu(NH3)4^2+': ['#1b3fc7', 12], 'FeSCN^2+': ['#c4161c', 600], 'Mn^2+': ['#f0c4d0', 0.4], 'Ni^2+': ['#4fbf6f', 2],
     'Zn(NH3)4^2+': ['#ffffff', 0], 'Ag(NH3)2+': ['#ffffff', 0],
   };
 
@@ -387,6 +387,6 @@
     { id: 'H3PO4', name: '磷酸 (催化量)' },
   ];
 
-  const D = { AMASS, SP, SYSTEMS, SOLIDLIMIT, PRECIP, ACIDSOL, EQ, HALF, METALS, AMPHO, IONCOLOR, REAG, INDICATORS, VESSELS, CATALYSTS, fmt, fmtPlain, parseComp, molarMass, chargeOf, stripId, KB_NH3 };
+  const D = { S, R, P, Hf, AMASS, SP, SYSTEMS, SOLIDLIMIT, PRECIP, ACIDSOL, EQ, HALF, METALS, AMPHO, IONCOLOR, REAG, INDICATORS, VESSELS, CATALYSTS, fmt, fmtPlain, parseComp, molarMass, chargeOf, stripId, KB_NH3 };
   if (typeof module !== 'undefined' && module.exports) module.exports = D; else g.ChemData = D;
 })(typeof window !== 'undefined' ? window : globalThis);
